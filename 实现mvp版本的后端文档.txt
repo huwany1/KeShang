@@ -1,0 +1,140 @@
+﻿课熵智能课堂系统 - 后端技术文档 (MVP版本)
+版本: 1.0
+日期: 2025年9月30日
+1. 概述
+1.1. 项目目标
+本文档旨在定义“课熵智能课堂系统”MVP版本的后端技术架构与实现方案。后端系统的核心目标是为产品的三大创新点提供稳定、高效、可扩展的技术支撑：
+1. 熵减知识引擎: 实现从教师上传的课件（MVP阶段重点支持PPT、PDF）中自动、高效地构建知识图谱。
+2. Spark动态生成技术: 根据知识图谱中的概念，实现低延迟（≤2秒）、多难度（5级）的课堂互动题目生成。
+3. 实时课堂互动: 支持教师与学生在课堂场景中的实时问答与反馈流程。
+1.2. 架构原则
+* 微服务架构: 将系统拆分为多个独立、高内聚的服务，便于独立开发、部署和扩展。
+* 云原生: 优先采用云服务提供商（根据项目计划书，选用腾讯云）的托管服务，降低运维成本，提升系统弹性。
+* 异步处理: 对于文件解析、知识图谱构建等耗时任务，采用消息队列进行异步处理，避免阻塞核心API，优化用户体验。
+* 性能优先: 针对题目生成和实时互动等核心场景，必须满足项目提出的低延迟指标（系统响应<500ms，题目生成≤2s）。
+2. 技术选型 (Tech Stack)
+类别
+	技术
+	选用理由
+	编程语言
+	Python 3.9+
+	拥有最成熟的AI/NLP生态系统（Hugging Face, PyTorch, Spacy），开发效率高，是实现核心算法的首选。
+	Web框架
+	FastAPI
+	性能极高，自带异步支持，能自动生成交互式API文档(Swagger UI)，非常适合构建微服务。
+	知识图谱数据库
+	Neo4j
+	业界领先的图数据库，能高效地存储和查询知识点之间的复杂关系，是“熵减知识引擎”的理想数据结构载体。
+	关系型数据库
+	PostgreSQL
+	功能强大，稳定可靠，用于存储用户信息、课程、文件元数据等结构化数据。
+	异步任务队列
+	Celery + RabbitMQ
+	成熟、强大的分布式任务队列解决方案，用于处理文件解析、知识图谱构建等重量级后台任务。
+	缓存数据库
+	Redis
+	高性能的内存数据库，用于缓存生成的题目、用户会话等热点数据，是满足低延迟响应目标的关键。
+	云服务提供商
+	腾讯云
+	项目申报书中指定的合作方，提供完整的计算、存储、数据库和AI平台服务。
+	容器化
+	Docker
+	实现应用环境的标准化封装，保证开发、测试、生产环境的一致性。
+	容器编排
+	Kubernetes (TKE)
+	使用腾讯云的托管K8s服务（TKE），实现服务的弹性伸缩、故障自愈和高效部署。
+	3. 系统架构设计
+系统将采用微服务架构，主要服务模块如下：
+![系统架构图]
+服务模块详解:
+1. API网关 (API Gateway)
+   * 职责：作为系统统一入口，处理路由、身份认证(JWT)、请求限流、日志记录。
+   * 实现：可使用Nginx或腾讯云API网关。
+2. 用户与认证服务 (User & Auth Service)
+   * 职责：管理用户（教师、学生）账户、注册、登录、JWT令牌的签发与校验。
+   * 数据库：PostgreSQL。
+3. 文档处理服务 (Document Processing Service)
+   * 职责：处理课件的上传、存储和内容提取。
+   * 流程：提供文件上传接口 -> 将文件存入腾讯云对象存储(COS) -> 创建文件元数据记录 -> 发送一个异步处理任务到Celery队列。
+   * 异步任务：从COS下载文件，使用python-pptx、PyMuPDF等库提取原始文本和结构信息。
+4. 知识引擎服务 (Knowledge Engine Service)
+   * 职责：实现“熵减知识引擎”的核心功能。
+   * 流程：接收文档处理服务提取的文本 -> 调用NLP模型（可基于开源框架如kg-gen或自研模型）进行实体识别、关系抽取 -> 构建知识图谱 -> 将图数据存入Neo4j数据库。
+   * 提供API：允许查询指定文档的知识图谱数据。
+5. 题目生成服务 (Question Generation Service)
+   * 职责：实现“Spark动态生成技术”。
+   * 流程：接收前端请求（包含知识点、难度等级） -> 调用部署在GPU服务器上的AQG模型（基于T5/BART等Transformer架构）生成题目 -> 对生成结果进行校验过滤 -> 将高质量题目存入Redis缓存并返回给前端。
+   * 性能关键点：模型本身需要进行优化（如量化、剪枝）以保证≤2秒的生成速度。必须部署于腾讯云的GPU云服务器实例上。
+6. 实时互动服务 (Real-time Interaction Service)
+   * 职责：管理实时的课堂教学会话。
+   * 技术：使用 WebSockets (FastAPI原生支持) 维持与客户端（教师端、学生端）的长连接。
+   * 流程：处理课堂创建、学生加入 -> 接收教师端推送的题目 -> 向所有学生端广播题目 -> 收集学生答案 -> 实时聚合结果并广播给所有客户端。
+4. 核心功能实现思路
+4.1. 流程一：课前准备 (异步)
+1. 教师上传课件:
+   * 前端请求 POST /documents/upload。
+   * 文档处理服务 接收文件，存入COS，在PostgreSQL中创建记录（状态：processing），并向Celery推送一个process_document任务。
+   * API立即返回{ "document_id": "...", "status": "processing" }，前端可轮询状态。
+2. 后台处理:
+   * Celery Worker获取任务，执行文本提取。
+   * Worker调用 知识引擎服务 的内部接口，传入提取的文本。
+   * 知识引擎服务 构建知识图谱并存入Neo4j。
+   * 完成后，更新PostgreSQL中文件记录的状态为 ready。
+4.2. 流程二：课堂互动 (实时)
+1. 进入课堂:
+   * 教师和学生客户端与 实时互动服务 建立WebSocket连接。
+2. 教师发起提问:
+   * 教师在UI上点击某个知识点。
+   * 前端请求 POST /questions/generate，参数为 { "concept": "分数", "difficulty": 3 }。
+   * 题目生成服务 首先检查Redis缓存。
+      * 缓存命中: 立即返回题目。
+      * 缓存未命中: 调用GPU服务器上的模型生成题目，存入缓存后返回。
+3. 师生互动:
+   * 教师确认题目后，通过WebSocket发送“推送题目”事件给 实时互动服务。
+   * 实时互动服务 将题目广播给该课堂的所有学生。
+   * 学生提交答案，通过WebSocket发送给 实时互动服务。
+   * 服务实时统计答案分布，并将结果（如各选项选择人数）广播给所有客户端，实现实时反馈。
+5. 数据库设计 (概要)
+5.1. PostgreSQL (关系型数据)
+* users: (id, name, email, password_hash, role)
+* classes: (id, name, teacher_id, join_code)
+* documents: (id, uploader_id, file_name, cos_path, status, knowledge_graph_id)
+* class_sessions: (id, class_id, document_id, start_time)
+5.2. Neo4j (图数据)
+* 节点 (Nodes):
+   * :Concept {name: "牛顿第二定律"}
+   * :Document {id: "doc_uuid_123"}
+* 关系 (Relationships):
+   * (c1:Concept)-[:RELATED_TO]->(c2:Concept)
+   * (c1:Concept)-[:IS_A]->(c2:Concept)
+   * (concept:Concept)-[:MENTIONED_IN]->(doc:Document)
+6. API接口定义 (核心)
+# 认证服务
+POST /auth/login
+POST /auth/register
+
+# 文档服务
+POST /documents/upload
+GET /documents/{document_id}/status
+GET /documents/{document_id}/knowledge_graph
+
+# 题目服务
+POST /questions/generate
+# Request Body:
+# {
+#   "document_id": "...",
+#   "concept_id": "...",
+#   "difficulty": 3
+# }
+
+# 实时服务 (WebSocket)
+WS /ws/session/{session_id}
+
+7. 部署与运维
+* 部署单元: 每个微服务构建为一个独立的Docker镜像，推送到腾讯云容器镜像服务(TCR)。
+* 环境编排: 使用腾讯云Kubernetes引擎(TKE)部署和管理所有服务。
+* 资源配置:
+   * 为 题目生成服务 配置带有GPU资源的TKE节点池，并设置HPA（水平 Pod 自动伸缩）策略。
+   * 其他服务使用常规的CPU节点。
+* CI/CD: 搭建自动化部署流水线，实现代码提交后自动测试和部署。
+* 监控与日志: 接入腾讯云的日志服务(CLS)和云监控(CM)，对各服务的性能指标（延迟、错误率）和资源使用情况进行全面监控，设置告警。

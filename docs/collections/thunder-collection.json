@@ -1,0 +1,114 @@
+{
+  "client": "thunderclient",
+  "collectionName": "KeShang Backend API",
+  "dateExported": "2025-09-30",
+  "version": "1.1",
+  "folders": [
+    {"_id": "auth", "name": "Auth"},
+    {"_id": "documents", "name": "Documents"},
+    {"_id": "knowledge", "name": "Knowledge"},
+    {"_id": "questions", "name": "Questions"}
+  ],
+  "requests": [
+    {
+      "_id": "auth-register",
+      "colId": "auth",
+      "name": "Register",
+      "url": "http://localhost:8080/auth/register",
+      "method": "POST",
+      "body": {
+        "type": "json",
+        "raw": {
+          "email": "t@example.com",
+          "name": "Teacher A",
+          "password": "pass1234"
+        }
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}]
+    },
+    {
+      "_id": "auth-login",
+      "colId": "auth",
+      "name": "Login",
+      "url": "http://localhost:8080/auth/login",
+      "method": "POST",
+      "body": {
+        "type": "json",
+        "raw": {
+          "email": "t@example.com",
+          "password": "pass1234"
+        }
+      },
+      "headers": [{"name": "Content-Type", "value": "application/json"}],
+      "script": {
+        "type": "test",
+        "exec": [
+          "const data = JSON.parse(response.body);",
+          "client.global.set('token', data.accessToken || '');"
+        ]
+      }
+    },
+    {
+      "_id": "doc-upload",
+      "colId": "documents",
+      "name": "Upload",
+      "url": "http://localhost:8080/documents/upload",
+      "method": "POST",
+      "body": {
+        "type": "formdata",
+        "form": [
+          {"name": "file", "type": "file", "value": "/path/to/sample.pdf"}
+        ]
+      },
+      "headers": [{"name": "Authorization", "value": "Bearer {{token}}"}]
+    },
+    {
+      "_id": "doc-status",
+      "colId": "documents",
+      "name": "Status",
+      "url": "http://localhost:8080/documents/{{documentId}}/status",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{token}}"}]
+    },
+    {
+      "_id": "kg-concepts",
+      "colId": "knowledge",
+      "name": "Concepts",
+      "url": "http://localhost:8080/knowledge/concepts?concept=机器学习",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{token}}"}]
+    },
+    {
+      "_id": "kg-graph",
+      "colId": "knowledge",
+      "name": "Document Graph",
+      "url": "http://localhost:8080/knowledge/documents/{{documentId}}/graph",
+      "method": "GET",
+      "headers": [{"name": "Authorization", "value": "Bearer {{token}}"}]
+    },
+    {
+      "_id": "qg-generate",
+      "colId": "questions",
+      "name": "Generate",
+      "url": "http://localhost:8080/questions/generate",
+      "method": "POST",
+      "body": {
+        "type": "json",
+        "raw": {
+          "concept": "线性回归",
+          "difficulty": 3
+        }
+      },
+      "headers": [
+        {"name": "Authorization", "value": "Bearer {{token}}"},
+        {"name": "Content-Type", "value": "application/json"}
+      ]
+    }
+  ],
+  "settings": [],
+  "env": [
+    {"name": "default", "data": {"token": "", "documentId": ""}}
+  ]
+}
+
+

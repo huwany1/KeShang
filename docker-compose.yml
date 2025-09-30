@@ -1,0 +1,133 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keshang}
+      POSTGRES_USER: ${POSTGRES_USER:-keshang}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-keshang_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  neo4j:
+    image: neo4j:5.20
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-neo4j_password}
+      NEO4J_dbms_memory_pagecache_size: 1G
+      NEO4J_dbms_memory_heap_initial__size: 1G
+      NEO4J_dbms_memory_heap_max__size: 2G
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
+  minio:
+    image: minio/minio:RELEASE.2024-08-03T04-33-23Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  auth_service:
+    build:
+      context: .
+      dockerfile: services/auth_service/Dockerfile
+    env_file: .env
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8001"
+
+  document_service:
+    build:
+      context: .
+      dockerfile: services/document_service/Dockerfile
+    env_file: .env
+    depends_on:
+      - minio
+      - rabbitmq
+      - postgres
+    ports:
+      - "8002:8002"
+
+  knowledge_service:
+    build:
+      context: .
+      dockerfile: services/knowledge_service/Dockerfile
+    env_file: .env
+    depends_on:
+      - neo4j
+    ports:
+      - "8003:8003"
+
+  question_service:
+    build:
+      context: .
+      dockerfile: services/question_service/Dockerfile
+    env_file: .env
+    depends_on:
+      - redis
+    ports:
+      - "8004:8004"
+
+  realtime_service:
+    build:
+      context: .
+      dockerfile: services/realtime_service/Dockerfile
+    env_file: .env
+    depends_on:
+      - redis
+    ports:
+      - "8005:8005"
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: services/document_service/Dockerfile
+    env_file: .env
+    command: ["celery", "-A", "services.document_service.worker", "worker", "-l", "INFO"]
+    depends_on:
+      - rabbitmq
+      - redis
+      - document_service
+
+  api_gateway:
+    image: nginx:1.25
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth_service
+      - document_service
+      - knowledge_service
+      - question_service
+      - realtime_service
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  minio_data:

@@ -1,0 +1,175 @@
+{
+  "info": {
+    "name": "KeShang Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {
+              "raw": "http://localhost:8080/auth/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"t@example.com\",\n  \"name\": \"Teacher A\",\n  \"password\": \"pass1234\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('token', data.accessToken || '');",
+                  "pm.test('token saved', function () { pm.expect(pm.collectionVariables.get('token')).to.not.equal(''); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"t@example.com\",\n  \"password\": \"pass1234\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "http://localhost:8080/documents/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["documents", "upload"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "file", "type": "file", "src": ["/path/to/sample.pdf"]}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "http://localhost:8080/documents/{{documentId}}/status",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["documents", "{{documentId}}", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Knowledge",
+      "item": [
+        {
+          "name": "Concepts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "http://localhost:8080/knowledge/concepts?concept=机器学习",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["knowledge", "concepts"],
+              "query": [{"key": "concept", "value": "机器学习"}]
+            }
+          }
+        },
+        {
+          "name": "Document Graph",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "http://localhost:8080/knowledge/documents/{{documentId}}/graph",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["knowledge", "documents", "{{documentId}}", "graph"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Questions",
+      "item": [
+        {
+          "name": "Generate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {
+              "raw": "http://localhost:8080/questions/generate",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["questions", "generate"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"concept\": \"线性回归\",\n  \"difficulty\": 3\n}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {"key": "token", "value": ""},
+    {"key": "documentId", "value": ""}
+  ]
+}
+
+
