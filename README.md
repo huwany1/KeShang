@@ -422,5 +422,5 @@ uvicorn services.auth_service.main:app --reload --port 8001
 - JWT 校验失败：确保请求头包含 `Authorization: Bearer <token>`，并在生产环境修改 `JWT_SECRET`。
 - Neo4j 连接错误：检查 `NEO4J_PASSWORD` 与 `neo4j` 容器日志，确认 `bolt://` 端口 7687 开放。
 
----### 许可 / License
+### 许可 / License
 内部项目（MVP）。如需开源协议，请在此处补充。
